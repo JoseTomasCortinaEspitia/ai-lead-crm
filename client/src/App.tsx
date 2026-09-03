@@ -1,52 +1,43 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 
-type State = 'idle' | 'saving' | 'success' | 'error';
+type Status = 'NEW' | 'INTERESTED' | 'CLOSED' | 'LOST';
+type Page = 'dashboard' | 'leads' | 'conversations' | 'analytics' | 'simulator' | 'settings';
+type Lead = { id:number; name:string; initials:string; email:string; phone:string; company:string; status:Status; source:string; updated:string; accent:string };
 
-export function App() {
-  const [state, setState] = useState<State>('idle');
-  const [message, setMessage] = useState('');
+const leads: Lead[] = [
+  { id:1,name:'Laura Gómez',initials:'LG',email:'laura@email.com',phone:'+57 300 123 4567',company:'Aura Estética',status:'INTERESTED',source:'WhatsApp',updated:'Hace 12 min',accent:'#d7edff' },
+  { id:2,name:'Mateo Rivera',initials:'MR',email:'mateo@northlab.co',phone:'+57 315 880 1142',company:'North Lab',status:'NEW',source:'Sitio web',updated:'Hace 35 min',accent:'#f5e3ff' },
+  { id:3,name:'Camila Torres',initials:'CT',email:'camila@bruna.com',phone:'+57 301 404 8290',company:'Bruna Café',status:'CLOSED',source:'Referido',updated:'Ayer',accent:'#ffe7d7' },
+  { id:4,name:'Daniel Ospina',initials:'DO',email:'daniel@atlasfit.co',phone:'+57 320 447 1902',company:'Atlas Fit',status:'INTERESTED',source:'Instagram',updated:'Ayer',accent:'#dcf5df' },
+  { id:5,name:'Sofía Ramírez',initials:'SR',email:'sofia@casaoliva.co',phone:'+57 314 621 7180',company:'Casa Oliva',status:'LOST',source:'WhatsApp',updated:'2 sep',accent:'#fff0c7' },
+];
+const nav:{id:Page;label:string;icon:string}[]=[{id:'dashboard',label:'Dashboard',icon:'⌂'},{id:'leads',label:'Leads',icon:'◎'},{id:'conversations',label:'Conversaciones',icon:'◫'},{id:'analytics',label:'Analítica',icon:'↗'},{id:'simulator',label:'Simulador IA',icon:'✦'}];
+const labels:Record<Status,string>={NEW:'Nuevo',INTERESTED:'Interesado',CLOSED:'Cerrado',LOST:'Perdido'};
+const StatusPill=({status}:{status:Status})=><span className={`status ${status.toLowerCase()}`}><i/>{labels[status]}</span>;
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setState('saving');
-    setMessage('');
-    const form = new FormData(event.currentTarget);
-
-    const response = await fetch('/api/leads', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(Object.fromEntries(form)),
-    }).catch(() => null);
-
-    if (!response?.ok) {
-      const body = response ? await response.json().catch(() => null) : null;
-      setMessage(body?.error ?? 'No pudimos guardar el lead.');
-      setState('error');
-      return;
-    }
-
-    event.currentTarget.reset();
-    setMessage('Lead creado correctamente.');
-    setState('success');
-  }
-
-  return (
-    <main>
-      <section>
-        <p className="eyebrow">AI Lead CRM</p>
-        <h1>Convierte una conversación en una oportunidad.</h1>
-        <p className="intro">Registra el primer contacto y deja que el equipo continúe desde ahí.</p>
-        <form onSubmit={submit}>
-          <label>Nombre<input name="name" required maxLength={120} /></label>
-          <label>Email<input name="email" type="email" required maxLength={254} /></label>
-          <label>Empresa<input name="company" maxLength={160} /></label>
-          <label>Teléfono<input name="phone" maxLength={40} /></label>
-          <input name="source" type="hidden" value="website" />
-          <button disabled={state === 'saving'}>{state === 'saving' ? 'Guardando…' : 'Crear lead'}</button>
-          {message && <p role="status" className={state}>{message}</p>}
-        </form>
-      </section>
-    </main>
-  );
+export function App(){
+  const [page,setPage]=useState<Page>('dashboard'),[selected,setSelected]=useState<Lead|null>(null),[query,setQuery]=useState(''),[filter,setFilter]=useState<'ALL'|Status>('ALL'),[toast,setToast]=useState('');
+  const [simMessages,setSimMessages]=useState([{sender:'ai',text:'¡Hola! Soy tu asistente comercial. Cuéntame, ¿qué te gustaría automatizar?'}]),[analyzed,setAnalyzed]=useState(false);
+  const visible=useMemo(()=>leads.filter(l=>`${l.name} ${l.company} ${l.email}`.toLowerCase().includes(query.toLowerCase())&&(filter==='ALL'||l.status===filter)),[query,filter]);
+  const go=(next:Page)=>{setPage(next);setSelected(null)}; const flash=(m:string)=>{setToast(m);window.setTimeout(()=>setToast(''),2400)};
+  return <div className="app-shell"><aside className="sidebar"><button className="brand" onClick={()=>go('dashboard')}><span>A</span>AI Lead <b>CRM</b></button><p className="nav-label">ESPACIO DE TRABAJO</p><nav>{nav.map(n=><button key={n.id} onClick={()=>go(n.id)} className={page===n.id?'active':''}><span>{n.icon}</span>{n.label}{n.id==='conversations'&&<em>8</em>}</button>)}</nav><div className="sidebar-bottom"><button onClick={()=>go('settings')}><span>⚙</span>Ajustes</button><div className="profile"><span className="avatar">JM</span><div><strong>José Martínez</strong><small>Administrador</small></div><button>•••</button></div></div></aside>
+  <main className="workspace"><header className="topbar"><button className="mobile-brand">A</button><div className="global-search"><span>⌕</span><input aria-label="Buscar" placeholder="Buscar leads, empresas..." value={query} onChange={e=>setQuery(e.target.value)}/><kbd>⌘ K</kbd></div><button className="icon-button">♢<i/></button><button className="primary" onClick={()=>{go('leads');flash('Vista de leads abierta')}}>＋ Nuevo lead</button></header>
+  {selected?<LeadDetail lead={selected} back={()=>setSelected(null)} flash={flash}/>:page==='dashboard'?<Dashboard onLead={setSelected} onAll={()=>go('leads')}/>:page==='leads'?<LeadsPage leads={visible} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} onLead={setSelected}/>:page==='simulator'?<Simulator messages={simMessages} setMessages={setSimMessages} analyzed={analyzed} setAnalyzed={setAnalyzed}/>:<Placeholder page={page}/>}</main>{toast&&<div className="toast">✓ {toast}</div>}</div>
 }
 
+function Dashboard({onLead,onAll}:{onLead:(l:Lead)=>void;onAll:()=>void}){const bars=[['Nuevos',54,'#4774e7'],['Interesados',42,'#f4ad42'],['Cerrados',18,'#2aac79'],['Perdidos',13,'#9aa3b2']] as const;return <div className="page"><Heading eyebrow="JUEVES, 3 DE SEPTIEMBRE" title="Buenos días, José." subtitle="Esto es lo que está pasando con tus leads hoy."/><section className="metrics"><Metric icon="◎" tone="blue" value="127" label="Total leads" change="12.5%"/><Metric icon="↗" tone="amber" value="42" label="Interesados" change="8.2%"/><Metric icon="✓" tone="green" value="18" label="Cerrados" change="4.1%"/><Metric icon="◈" tone="violet" value="14.2%" label="Conversión" change="2.4%"/></section><section className="dashboard-grid"><article className="panel"><PanelTitle title="Leads por estado" sub="Distribución en los últimos 30 días"/><div className="bars">{bars.map(b=><div className="bar-row" key={b[0]}><span>{b[0]}</span><div><i style={{width:`${b[1]/54*100}%`,background:b[2]}}/></div><b>{b[1]}</b></div>)}</div><div className="bar-total"><span>Total</span><strong>127 leads</strong></div></article><article className="panel"><PanelTitle title="Actividad reciente" sub="Últimas interacciones del equipo" action={onAll}/><div className="activity-list"><Activity avatar="LG" title="Laura Gómez respondió" text="“Sí, me interesa conocer los planes…”" time="Hace 12 min"/><Activity avatar="MR" title="Nuevo lead creado" text="Mateo Rivera · North Lab" time="Hace 35 min"/><Activity avatar="CT" title="Lead marcado como cerrado" text="Camila Torres · Bruna Café" time="Ayer, 4:22 p. m."/><Activity avatar="DO" title="Resumen generado por IA" text="Daniel Ospina · Atlas Fit" time="Ayer, 2:08 p. m."/></div></article></section><section className="panel recent"><PanelTitle title="Leads recientes" sub="Contactos con actividad más reciente" action={onAll}/><LeadTable leads={leads.slice(0,4)} onLead={onLead}/></section></div>}
+function Heading({eyebrow,title,subtitle,action}:{eyebrow:string;title:string;subtitle:string;action?:React.ReactNode}){return <div className="page-heading"><div><p>{eyebrow}</p><h1>{title}</h1><span>{subtitle}</span></div>{action}</div>}
+function PanelTitle({title,sub,action}:{title:string;sub:string;action?:()=>void}){return <div className="panel-title"><div><h2>{title}</h2><p>{sub}</p></div>{action?<button onClick={action}>Ver todo →</button>:<button>•••</button>}</div>}
+function Metric({icon,tone,value,label,change}:{icon:string;tone:string;value:string;label:string;change:string}){return <article className="metric"><span className={`metric-icon ${tone}`}>{icon}</span><div><p>{label}</p><strong>{value}</strong><small><b>↗ {change}</b> vs. periodo anterior</small></div></article>}
+function Activity({avatar,title,text,time}:{avatar:string;title:string;text:string;time:string}){return <div className="activity"><span className="avatar">{avatar}</span><div><strong>{title}</strong><p>{text}</p></div><small>{time}</small><i/></div>}
+
+function LeadsPage({leads,query,setQuery,filter,setFilter,onLead}:{leads:Lead[];query:string;setQuery:(s:string)=>void;filter:'ALL'|Status;setFilter:(s:'ALL'|Status)=>void;onLead:(l:Lead)=>void}){return <div className="page"><Heading eyebrow="GESTIÓN COMERCIAL" title="Leads" subtitle="Organiza contactos y prioriza las mejores oportunidades." action={<button className="primary">＋ Nuevo lead</button>}/><section className="panel leads-panel"><div className="lead-tools"><div className="search"><span>⌕</span><input placeholder="Buscar por nombre, empresa o email" value={query} onChange={e=>setQuery(e.target.value)}/></div><div className="filters">{(['ALL','NEW','INTERESTED','CLOSED','LOST'] as const).map(s=><button key={s} className={filter===s?'selected':''} onClick={()=>setFilter(s)}>{s==='ALL'?'Todos':labels[s]}</button>)}</div></div>{leads.length?<LeadTable leads={leads} onLead={onLead}/>:<div className="empty"><span>⌕</span><h3>No encontramos leads</h3><p>Prueba con otro término o cambia el filtro.</p></div>}</section></div>}
+function LeadTable({leads,onLead}:{leads:Lead[];onLead:(l:Lead)=>void}){return <div className="table-wrap"><table><thead><tr><th>LEAD</th><th>EMPRESA</th><th>ESTADO</th><th>ORIGEN</th><th>ÚLTIMA ACTIVIDAD</th><th/></tr></thead><tbody>{leads.map(l=><tr key={l.id} onClick={()=>onLead(l)}><td><span className="avatar" style={{background:l.accent}}>{l.initials}</span><div><strong>{l.name}</strong><small>{l.email}</small></div></td><td>{l.company}</td><td><StatusPill status={l.status}/></td><td>{l.source}</td><td>{l.updated}</td><td>›</td></tr>)}</tbody></table></div>}
+
+function LeadDetail({lead,back,flash}:{lead:Lead;back:()=>void;flash:(s:string)=>void}){const [generated,setGenerated]=useState(false),[closed,setClosed]=useState(lead.status==='CLOSED');return <div className="page"><button className="back" onClick={back}>← Volver a leads</button><div className="detail-heading"><div className="lead-identity"><span className="avatar large" style={{background:lead.accent}}>{lead.initials}</span><div><h1>{lead.name}</h1><p>{lead.company}</p></div></div><StatusPill status={closed?'CLOSED':lead.status}/></div><div className="detail-grid"><section className="conversation panel"><div className="conversation-head"><PanelTitle title="Conversación" sub="WhatsApp · iniciada hoy a las 9:18 a. m."/><span>● En línea</span></div><div className="messages"><div className="day">HOY</div><Message who="Laura" time="9:18 a. m." text="Hola, quisiera saber cuánto cuesta automatizar el WhatsApp de mi negocio."/><Message agent who="Tú" time="9:20 a. m." text="¡Hola, Laura! Claro. ¿Qué tipo de negocio tienes y cuántos mensajes reciben aproximadamente?"/><Message who="Laura" time="9:23 a. m." text="Una estética en Medellín. Recibimos unos 80 mensajes diarios y casi todos preguntan por los mismos precios."/><Message agent who="Tú" time="9:25 a. m." text="Perfecto, hay una buena oportunidad de automatización. Podemos revisar sus flujos y recomendarte un plan."/></div><form className="composer" onSubmit={e=>{e.preventDefault();flash('Mensaje enviado')}}><input placeholder="Escribe una respuesta..."/><button>Enviar ↑</button></form></section><aside className="lead-sidebar"><section className="panel contact-card"><PanelTitle title="Información" sub="Datos de contacto"/><Info label="Email" value={lead.email}/><Info label="Teléfono" value={lead.phone}/><Info label="Empresa" value={lead.company}/><Info label="Origen" value={lead.source}/></section><section className="panel ai-card"><AiHeading/>{generated?<><div className="score"><strong>92<small>/100</small></strong><span>INTENCIÓN ALTA</span></div><p>Negocio de belleza con 80 mensajes diarios. Interés claro en automatizar consultas repetitivas de precios por WhatsApp.</p><h3>ACCIÓN RECOMENDADA</h3><div className="recommendation">↗ Agendar una demo en las próximas 24 horas.</div><div className="topics"><span>WhatsApp</span><span>Automatización</span><span>Precios</span></div></>:<div className="ai-empty">Analiza la conversación para detectar intención, temas y el siguiente paso comercial.</div>}<button className="ai-button" onClick={()=>{setGenerated(true);flash('Análisis generado')}}>✦ {generated?'Actualizar análisis':'Generar análisis'}</button></section><button className="close-button" disabled={closed} onClick={()=>{setClosed(true);flash('Lead marcado como cerrado')}}>✓ {closed?'Lead cerrado':'Marcar como cerrado'}</button></aside></div></div>}
+function Message({who,time,text,agent}:{who:string;time:string;text:string;agent?:boolean}){return <div className={`message ${agent?'agent':''}`}><div><strong>{who}</strong><small>{time}</small></div><p>{text}</p></div>}
+function Info({label,value}:{label:string;value:string}){return <div className="info-row"><span>{label}</span><strong>{value}</strong></div>}
+function AiHeading(){return <div className="ai-heading"><span>✦</span><div><h2>Análisis con IA</h2><p>Insights comerciales estructurados</p></div></div>}
+
+function Simulator({messages,setMessages,analyzed,setAnalyzed}:{messages:{sender:string;text:string}[];setMessages:React.Dispatch<React.SetStateAction<{sender:string;text:string}[]>>;analyzed:boolean;setAnalyzed:(v:boolean)=>void}){const submit=(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();const f=new FormData(e.currentTarget),text=String(f.get('message')||'').trim();if(!text)return;setMessages(old=>[...old,{sender:'customer',text},{sender:'ai',text:old.length<3?'Perfecto. ¿Cuántas consultas reciben al día y qué preguntas se repiten más?':'Con ese volumen podemos automatizar las respuestas frecuentes y derivar las oportunidades al equipo.'}]);e.currentTarget.reset();setAnalyzed(false)};return <div className="page"><Heading eyebrow="LABORATORIO COMERCIAL" title="Simulador de conversación" subtitle="Prueba el asistente y analiza una oportunidad en tiempo real."/><div className="sim-grid"><section className="panel sim-chat"><div className="sim-header"><span>✦</span><div><strong>AI Sales Assistant</strong><small>● Disponible</small></div></div><div className="sim-messages">{messages.map((m,i)=><div key={i} className={`sim-message ${m.sender}`}><b>{m.sender==='ai'?'IA':'Tú'}</b><p>{m.text}</p></div>)}</div><form className="sim-input" onSubmit={submit}><input name="message" placeholder="Escribe como si fueras un cliente..."/><button>↑</button></form></section><aside className="panel analysis"><AiHeading/>{analyzed?<div className="analysis-content"><div className="score-ring"><strong>87</strong><span>/100</span></div><StatusPill status="INTERESTED"/><h3>RESUMEN</h3><p>Propietario de un negocio interesado en automatizar la atención recurrente por WhatsApp.</p><h3>SIGUIENTE PASO</h3><div className="recommendation">Contactar en las próximas 24 horas para una demo personalizada.</div></div>:<div className="analysis-empty"><span>✦</span><h3>Convierte mensajes en señales</h3><p>Obtén intención, score y siguiente acción.</p></div>}<button className="ai-button" disabled={messages.length<2} onClick={()=>setAnalyzed(true)}>✦ Analizar conversación</button></aside></div></div>}
+function Placeholder({page}:{page:Page}){const names:Record<Page,string>={dashboard:'',leads:'',conversations:'Conversaciones',analytics:'Analítica',simulator:'',settings:'Ajustes'};return <div className="page placeholder"><span>✦</span><h1>{names[page]}</h1><p>Esta sección está lista para conectarse con los datos del equipo.</p></div>}
