@@ -36,6 +36,15 @@ El cliente queda en `http://localhost:5173` y la API en `http://localhost:3001`.
 
 `name` y `email` son obligatorios. La API devuelve `201` con el lead creado, `400` para datos inválidos y `409` si el correo ya existe.
 
+| Método | Ruta | Resultado |
+| --- | --- | --- |
+| GET | `/api/leads` | `200`, `{ "data": [...] }`, ordenado del más reciente al más antiguo |
+| GET | `/api/leads/:id` | `200`, `{ "data": lead }` |
+| PATCH | `/api/leads/:id` | `200`, `{ "data": lead }` con los cambios persistidos |
+| DELETE | `/api/leads/:id` | `204`, sin cuerpo |
+
+El identificador debe ser un UUID válido (`400` en caso contrario). Las rutas por ID devuelven `404` si el lead no existe. `PATCH` requiere al menos un campo y permite cambiar `name`, `email`, `company`, `phone`, `source` y `status` (`new`, `contacted`, `qualified`, `won`, `lost`). Los campos omitidos conservan su valor; enviar `""` en `company` o `phone` los limpia. Cada actualización modifica `updatedAt`; un correo duplicado devuelve `409`.
+
 ## Probar la aplicación y llenar PostgreSQL
 
 1. Crea el archivo local de configuración desde PowerShell:
@@ -82,7 +91,7 @@ El cliente queda en `http://localhost:5173` y la API en `http://localhost:3001`.
    docker compose exec postgres psql -U postgres -d ai_lead_crm -c "SELECT id, name, email, company, status, source, created_at FROM leads ORDER BY created_at DESC;"
    ```
 
-También puedes abrir `http://localhost:3001/health` para comprobar que la API está activa. En este primer vertical slice, la creación persistente se prueba mediante `POST /api/leads`; los datos visibles del dashboard todavía son demostrativos y aún no se consultan desde PostgreSQL.
+También puedes abrir `http://localhost:3001/health` para comprobar que la API está activa. El backend permite crear, listar, consultar, actualizar y eliminar leads en PostgreSQL mediante `/api/leads`; los datos visibles del dashboard todavía son demostrativos y aún no se consultan desde PostgreSQL.
 
 Para detener la aplicación usa `Ctrl+C`. La base de datos permanece en el volumen de Docker. `docker compose down` detiene PostgreSQL sin borrar los leads; `docker compose down -v` también elimina el volumen y todos sus datos.
 

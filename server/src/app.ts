@@ -4,6 +4,10 @@ import { z } from 'zod';
 
 export interface LeadStore {
   create(input: LeadInput): Promise<Lead>;
+  list(): Promise<Lead[]>;
+  get(id: string): Promise<Lead | undefined>;
+  update(id: string, input: LeadUpdate): Promise<Lead | undefined>;
+  delete(id: string): Promise<boolean>;
 }
 
 export interface Lead extends LeadInput {
@@ -23,6 +27,12 @@ const leadSchema = z.object({
 
 export type LeadInput = z.infer<typeof leadSchema>;
 
+const updateSchema = leadSchema.partial().extend({
+  source: z.string().trim().min(1).max(80).optional(),
+  status: z.enum(['new', 'contacted', 'qualified', 'won', 'lost']).optional(),
+}).refine(value => Object.keys(value).length > 0, 'At least one field is required');
+export type LeadUpdate = z.infer<typeof updateSchema>;
+
 export function createApp(store: LeadStore) {
   const app = express();
   app.disable('x-powered-by');
@@ -30,6 +40,57 @@ export function createApp(store: LeadStore) {
   app.use(express.json({ limit: '32kb' }));
 
   app.get('/health', (_request, response) => response.json({ status: 'ok' }));
+
+  app.get('/api/leads', async (_request, response) => {
+    response.json({ data: await store.list() });
+  });
+
+  app.use('/api/leads/:id', (request, response, next) => {
+    if (!z.uuid().safeParse(request.params.id).success) {
+      response.status(400).json({ error: 'Invalid lead id' });
+      return;
+    }
+    next();
+  });
+
+  app.get('/api/leads/:id', async (request, response) => {
+    const lead = await store.get(request.params.id);
+    if (!lead) {
+      response.status(404).json({ error: 'Lead not found' });
+      return;
+    }
+    response.json({ data: lead });
+  });
+
+  app.patch('/api/leads/:id', async (request, response, next) => {
+    const parsed = updateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ error: 'Invalid lead data', details: z.flattenError(parsed.error) });
+      return;
+    }
+    try {
+      const lead = await store.update(request.params.id, parsed.data);
+      if (!lead) {
+        response.status(404).json({ error: 'Lead not found' });
+        return;
+      }
+      response.json({ data: lead });
+    } catch (error: unknown) {
+      if (isUniqueViolation(error)) {
+        response.status(409).json({ error: 'A lead with this email already exists' });
+        return;
+      }
+      next(error);
+    }
+  });
+
+  app.delete('/api/leads/:id', async (request, response) => {
+    if (!await store.delete(request.params.id)) {
+      response.status(404).json({ error: 'Lead not found' });
+      return;
+    }
+    response.status(204).end();
+  });
 
   app.post('/api/leads', async (request, response, next) => {
     const parsed = leadSchema.safeParse(request.body);
