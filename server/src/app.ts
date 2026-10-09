@@ -53,9 +53,18 @@ export function createApp(store: LeadStore) {
     }
   });
 
-  app.use((_error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
+  /*app.use((_error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
     response.status(500).json({ error: 'Internal server error' });
+  });*/
+
+  app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
+  console.error('SERVER ERROR:', error);
+
+  response.status(500).json({
+    error: 'Internal server error'
   });
+  
+});
 
   return app;
 }

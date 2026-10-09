@@ -3,6 +3,8 @@ import { createApp } from './app.js';
 import { pool } from './db.js';
 import { PostgresLeadStore } from './lead-store.js';
 
+console.log('DATABASE_URL:', process.env.DATABASE_URL);
+
 const port = Number(process.env.PORT ?? 3001);
 const app = createApp(new PostgresLeadStore(pool));
 
