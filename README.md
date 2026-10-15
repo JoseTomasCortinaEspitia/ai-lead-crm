@@ -91,7 +91,7 @@ El identificador debe ser un UUID válido (`400` en caso contrario). Las rutas p
    docker compose exec postgres psql -U postgres -d ai_lead_crm -c "SELECT id, name, email, company, status, source, created_at FROM leads ORDER BY created_at DESC;"
    ```
 
-También puedes abrir `http://localhost:3001/health` para comprobar que la API está activa. El backend permite crear, listar, consultar, actualizar y eliminar leads en PostgreSQL mediante `/api/leads`; los datos visibles del dashboard todavía son demostrativos y aún no se consultan desde PostgreSQL.
+También puedes abrir `http://localhost:3001/health` para comprobar que la API está activa. El backend permite crear, listar, consultar, actualizar y eliminar leads en PostgreSQL mediante `/api/leads`; React consulta `GET /api/leads` al abrir la aplicación. El dashboard y la lista muestran los contactos y contadores de PostgreSQL, con estados de carga, error con reintento y lista vacía. Las conversaciones, el simulador y las acciones del detalle siguen siendo demostrativos. En producción, redirige `/api` al servidor de la API; en desarrollo lo hace Vite.
 
 Para detener la aplicación usa `Ctrl+C`. La base de datos permanece en el volumen de Docker. `docker compose down` detiene PostgreSQL sin borrar los leads; `docker compose down -v` también elimina el volumen y todos sus datos.
 
