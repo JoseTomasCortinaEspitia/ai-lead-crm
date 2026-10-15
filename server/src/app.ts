@@ -29,7 +29,7 @@ export type LeadInput = z.infer<typeof leadSchema>;
 
 const updateSchema = leadSchema.partial().extend({
   source: z.string().trim().min(1).max(80).optional(),
-  status: z.enum(['new', 'contacted', 'qualified', 'won', 'lost']).optional(),
+  status: z.enum(['new', 'contacted', 'qualified', 'won', 'closed', 'lost']).optional(),
 }).refine(value => Object.keys(value).length > 0, 'At least one field is required');
 export type LeadUpdate = z.infer<typeof updateSchema>;
 

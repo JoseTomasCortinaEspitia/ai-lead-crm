@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import request from 'supertest';
 import { createApp, type LeadStore } from '../src/app.js';
+import type { Pool } from 'pg';
+import { PostgresLeadStore } from '../src/lead-store.js';
 
 function makeStore(overrides: Partial<LeadStore> = {}): LeadStore {
   return {
@@ -18,6 +20,28 @@ const id = '550e8400-e29b-41d4-a716-446655440000';
 const lead = { id, name: 'Ada', email: 'ada@example.com', source: 'website', status: 'new', createdAt: new Date(), updatedAt: new Date() };
 
 describe('Lead CRUD', () => {
+  it('persists closed through the PostgreSQL store and reads it back', async () => {
+    const row = { ...lead, company: null, phone: null, created_at: lead.createdAt, updated_at: lead.updatedAt };
+    const pool = { async query(sql: string, values: unknown[]) {
+      if (sql.startsWith('UPDATE')) {
+        assert.equal(sql, 'UPDATE leads SET status = $1, updated_at = now() WHERE id = $2 RETURNING *');
+        assert.deepEqual(values, ['closed', id]);
+        row.status = String(values[0]);
+      } else {
+        assert.equal(sql, 'SELECT * FROM leads WHERE id = $1');
+        assert.deepEqual(values, [id]);
+      }
+      return { rows: [row] };
+    } } as unknown as Pool;
+    const app = createApp(new PostgresLeadStore(pool));
+    const response = await request(app).patch(`/api/leads/${id}`).send({ status: 'closed' });
+    assert.equal(response.status, 200);
+    assert.equal(response.body.data.status, 'closed');
+    const reloaded = await request(app).get(`/api/leads/${id}`);
+    assert.equal(reloaded.body.data.status, 'closed');
+    assert.equal(reloaded.body.data.email, lead.email);
+  });
+
   it('lists leads and returns an empty collection', async () => {
     const response = await request(createApp(makeStore({ async list() { return [lead]; } }))).get('/api/leads');
     assert.equal(response.status, 200);
