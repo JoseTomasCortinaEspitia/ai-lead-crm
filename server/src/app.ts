@@ -1,6 +1,7 @@
 import cors from 'cors';
 import express from 'express';
 import { z } from 'zod';
+import { MockAiProvider, type AiProvider } from './ai.js';
 
 export interface LeadStore {
   create(input: LeadInput): Promise<Lead>;
@@ -33,13 +34,26 @@ const updateSchema = leadSchema.partial().extend({
 }).refine(value => Object.keys(value).length > 0, 'At least one field is required');
 export type LeadUpdate = z.infer<typeof updateSchema>;
 
-export function createApp(store: LeadStore) {
+export function createApp(store: LeadStore, ai: AiProvider = new MockAiProvider()) {
   const app = express();
   app.disable('x-powered-by');
   app.use(cors());
   app.use(express.json({ limit: '32kb' }));
 
   app.get('/health', (_request, response) => response.json({ status: 'ok' }));
+
+  app.post('/api/ai/analyze', async (request, response) => {
+    const parsed = z.object({ conversation: z.string().trim().min(1).max(12000) }).strict().safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ error: 'Invalid conversation' });
+      return;
+    }
+    try {
+      response.json({ data: { ...await ai.analyze(parsed.data.conversation), provider: ai.name } });
+    } catch {
+      response.status(502).json({ error: 'AI analysis unavailable. Please retry.' });
+    }
+  });
 
   app.get('/api/leads', async (_request, response) => {
     response.json({ data: await store.list() });
